@@ -1,0 +1,21 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Enabled",
+                "ssl": {
+                    "ca": "./isrgrootx1.pem"
+                }
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "gateway01.ap-northeast-1.prod.aws.tidbcloud.com",
+            "port": 4000,
+            "driver": "TiDB",
+            "name": "cluster0",
+            "database": "test",
+            "username": "3kk6v5CbbVeBoEK.root"
+        }
+    ]
+}
