@@ -6,9 +6,9 @@ session_start();
 // 請填入你的 TiDB 連線資訊
 define('DB_HOST', 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com');  // TiDB host
 define('DB_PORT', '4000');  // TiDB port (預設 4000)
-define('DB_NAME', 'ntust_healthmap');  // 你的資料庫名稱
-define('DB_USER', 'your_tidb_user');  // TiDB 使用者名稱
-define('DB_PASS', 'your_tidb_password');  // TiDB 密碼
+define('DB_NAME', 'test');  // 你的資料庫名稱
+define('DB_USER', '3kk6v5CbbVeBoEK.root');  // TiDB 使用者名稱
+define('DB_PASS', '8XlhvBU7UjCXD0VO');  // TiDB 密碼
 
 // Local MySQL Settings (註解掉，備用)
 // define('DB_HOST', '127.0.0.1');
