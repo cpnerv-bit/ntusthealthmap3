@@ -185,3 +185,21 @@ CREATE TABLE IF NOT EXISTS `money_logs` (
   CONSTRAINT `fk_ml_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
   KEY `idx_user_date` (`user_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================================
+-- 好友聊天訊息資料表
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `chat_messages` (
+  `message_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `sender_id` INT NOT NULL,
+  `receiver_id` INT NOT NULL,
+  `message_type` ENUM('text', 'voice') DEFAULT 'text' COMMENT '訊息類型：文字或語音',
+  `content` TEXT NOT NULL COMMENT '文字訊息內容或語音檔案路徑',
+  `is_read` TINYINT(1) DEFAULT 0 COMMENT '是否已讀：0=未讀, 1=已讀',
+  `read_at` TIMESTAMP NULL COMMENT '已讀時間',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_cm_sender` FOREIGN KEY (`sender_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_cm_receiver` FOREIGN KEY (`receiver_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+  KEY `idx_sender_receiver` (`sender_id`, `receiver_id`),
+  KEY `idx_receiver_unread` (`receiver_id`, `is_read`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

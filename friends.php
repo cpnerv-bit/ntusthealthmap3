@@ -160,6 +160,109 @@ foreach ($friends as $friend) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="assets/styles.css" rel="stylesheet">
+  <style>
+    /* 聊天視窗樣式 */
+    .chat-modal .modal-dialog {
+      max-width: 600px;
+      height: 80vh;
+      margin: 10vh auto;
+    }
+    .chat-modal .modal-content {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-modal .modal-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      background: #f8f9fa;
+    }
+    .chat-input-area {
+      padding: 1rem;
+      border-top: 1px solid #dee2e6;
+      background: white;
+    }
+    .message-bubble {
+      max-width: 75%;
+      padding: 0.75rem 1rem;
+      border-radius: 1rem;
+      margin-bottom: 0.5rem;
+      position: relative;
+      word-wrap: break-word;
+    }
+    .message-sent {
+      background: linear-gradient(135deg, #6C63FF 0%, #9D4EDD 100%);
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 0.25rem;
+    }
+    .message-received {
+      background: white;
+      color: #333;
+      margin-right: auto;
+      border-bottom-left-radius: 0.25rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .message-time {
+      font-size: 0.7rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .message-read-status {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.8);
+      margin-top: 0.15rem;
+    }
+    .message-voice {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .message-voice audio {
+      max-width: 200px;
+      height: 32px;
+    }
+    .chat-btn-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      font-size: 0.65rem;
+      min-width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .recording-indicator {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      color: #dc3545;
+    }
+    .recording-indicator.active {
+      display: flex;
+    }
+    .recording-dot {
+      width: 12px;
+      height: 12px;
+      background: #dc3545;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
 </head>
 <body>
   <nav class="navbar navbar-expand-lg">
@@ -266,8 +369,8 @@ foreach ($friends as $friend) {
                       <strong><?php echo htmlspecialchars($friend['display_name'] ?? $friend['username']); ?></strong>
                       <small class="text-muted">(@<?php echo htmlspecialchars($friend['username']); ?>)</small>
                     </div>
-                    <?php if (count($available_teams) > 0): ?>
                     <div class="d-flex gap-2" style="overflow: visible;">
+                      <?php if (count($available_teams) > 0): ?>
                       <div class="dropdown">
                         <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                           <i class="fas fa-user-plus me-1"></i>邀請加入團隊
@@ -287,15 +390,20 @@ foreach ($friends as $friend) {
                           <?php endforeach; ?>
                         </ul>
                       </div>
+                      <?php endif; ?>
+                      <!-- 聊天按鈕 -->
+                      <button type="button" class="btn btn-outline-info btn-sm position-relative chat-btn" 
+                              data-friend-id="<?php echo $friend['user_id']; ?>" 
+                              data-friend-name="<?php echo htmlspecialchars($friend['display_name'] ?? $friend['username']); ?>"
+                              data-bs-toggle="modal" data-bs-target="#chatModal">
+                        <i class="fas fa-comments"></i>
+                        <span class="badge bg-danger chat-btn-badge d-none" id="unreadBadge<?php echo $friend['user_id']; ?>">0</span>
+                      </button>
+                      <!-- 刪除好友按鈕 -->
                       <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteFriendModal<?php echo $friend['user_id']; ?>">
                         <i class="fas fa-user-minus"></i>
                       </button>
                     </div>
-                    <?php else: ?>
-                    <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteFriendModal<?php echo $friend['user_id']; ?>">
-                      <i class="fas fa-user-minus me-1"></i>刪除好友
-                    </button>
-                    <?php endif; ?>
                   </div>
                 <?php endforeach; ?>
               </div>
@@ -337,6 +445,324 @@ foreach ($friends as $friend) {
   </div>
   <?php endforeach; ?>
 
+  <!-- 聊天 Modal -->
+  <div class="modal fade chat-modal" id="chatModal" tabindex="-1" aria-labelledby="chatModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="chatModalLabel">
+            <i class="fas fa-comments text-info me-2"></i>
+            與 <span id="chatFriendName"></span> 聊天
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="chat-messages" id="chatMessages">
+            <!-- 訊息會動態載入 -->
+            <div class="text-center text-muted py-5" id="chatLoading">
+              <i class="fas fa-spinner fa-spin me-2"></i>載入中...
+            </div>
+          </div>
+          <div class="chat-input-area">
+            <div class="recording-indicator mb-2" id="recordingIndicator">
+              <span class="recording-dot"></span>
+              <span>錄音中... <span id="recordingTime">0:00</span></span>
+              <button type="button" class="btn btn-sm btn-danger ms-auto" id="stopRecordingBtn">
+                <i class="fas fa-stop me-1"></i>停止
+              </button>
+            </div>
+            <div class="d-flex gap-2">
+              <input type="text" class="form-control" id="chatInput" placeholder="輸入訊息..." autocomplete="off">
+              <button type="button" class="btn btn-outline-secondary" id="voiceBtn" title="發送語音訊息">
+                <i class="fas fa-microphone"></i>
+              </button>
+              <button type="button" class="btn btn-primary" id="sendBtn">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 聊天功能
+    let currentFriendId = null;
+    let currentFriendName = '';
+    let lastMessageId = 0;
+    let pollInterval = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordingStartTime = null;
+    let recordingTimer = null;
+
+    // 頁面載入時獲取未讀訊息數量
+    document.addEventListener('DOMContentLoaded', function() {
+      loadUnreadCounts();
+      // 每30秒更新一次未讀數量
+      setInterval(loadUnreadCounts, 30000);
+    });
+
+    // 載入未讀訊息數量
+    function loadUnreadCounts() {
+      fetch('chat_api.php?action=get_unread_counts')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            // 更新所有好友的未讀徽章
+            document.querySelectorAll('.chat-btn').forEach(btn => {
+              const friendId = btn.dataset.friendId;
+              const badge = document.getElementById('unreadBadge' + friendId);
+              const count = data.unread[friendId] || 0;
+              if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('d-none');
+              } else {
+                badge.classList.add('d-none');
+              }
+            });
+          }
+        })
+        .catch(err => console.error('載入未讀數量失敗:', err));
+    }
+
+    // 聊天按鈕點擊事件
+    document.querySelectorAll('.chat-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        currentFriendId = this.dataset.friendId;
+        currentFriendName = this.dataset.friendName;
+        document.getElementById('chatFriendName').textContent = currentFriendName;
+        loadMessages();
+      });
+    });
+
+    // Modal 關閉時停止輪詢
+    document.getElementById('chatModal').addEventListener('hidden.bs.modal', function() {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      currentFriendId = null;
+      lastMessageId = 0;
+    });
+
+    // 載入聊天記錄
+    function loadMessages() {
+      const container = document.getElementById('chatMessages');
+      container.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-spinner fa-spin me-2"></i>載入中...</div>';
+      
+      fetch('chat_api.php?action=get_messages&friend_id=' + currentFriendId)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            container.innerHTML = '';
+            if (data.messages.length === 0) {
+              container.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-comments me-2"></i>開始與好友聊天吧！</div>';
+            } else {
+              data.messages.forEach(msg => {
+                appendMessage(msg, data.user_id);
+                lastMessageId = Math.max(lastMessageId, parseInt(msg.message_id));
+              });
+              scrollToBottom();
+            }
+            // 更新未讀徽章
+            const badge = document.getElementById('unreadBadge' + currentFriendId);
+            badge.classList.add('d-none');
+            // 開始輪詢新訊息
+            startPolling();
+          } else {
+            container.innerHTML = '<div class="alert alert-danger">' + data.message + '</div>';
+          }
+        })
+        .catch(err => {
+          container.innerHTML = '<div class="alert alert-danger">載入失敗</div>';
+        });
+    }
+
+    // 添加訊息到聊天視窗
+    function appendMessage(msg, userId) {
+      const container = document.getElementById('chatMessages');
+      const isSent = parseInt(msg.sender_id) === parseInt(userId);
+      const div = document.createElement('div');
+      div.className = 'message-bubble ' + (isSent ? 'message-sent' : 'message-received');
+      div.dataset.messageId = msg.message_id;
+      
+      let content = '';
+      if (msg.message_type === 'voice') {
+        content = '<div class="message-voice"><i class="fas fa-volume-up"></i><audio controls src="' + escapeHtml(msg.content) + '"></audio></div>';
+      } else {
+        content = escapeHtml(msg.content);
+      }
+      
+      const time = new Date(msg.created_at).toLocaleTimeString('zh-TW', {hour: '2-digit', minute: '2-digit'});
+      
+      div.innerHTML = content + 
+        '<div class="message-time">' + time + '</div>' +
+        (isSent ? '<div class="message-read-status">' + (parseInt(msg.is_read) ? '已讀' : '') + '</div>' : '');
+      
+      container.appendChild(div);
+    }
+
+    // 開始輪詢新訊息
+    function startPolling() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(checkNewMessages, 2000);
+    }
+
+    // 檢查新訊息
+    function checkNewMessages() {
+      if (!currentFriendId) return;
+      
+      fetch('chat_api.php?action=check_new_messages&friend_id=' + currentFriendId + '&last_message_id=' + lastMessageId)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            // 添加新訊息
+            data.messages.forEach(msg => {
+              appendMessage(msg, data.user_id);
+              lastMessageId = Math.max(lastMessageId, parseInt(msg.message_id));
+            });
+            if (data.messages.length > 0) {
+              scrollToBottom();
+            }
+            // 更新已讀狀態
+            data.read_ids.forEach(id => {
+              const bubble = document.querySelector('[data-message-id="' + id + '"]');
+              if (bubble) {
+                const status = bubble.querySelector('.message-read-status');
+                if (status && !status.textContent) {
+                  status.textContent = '已讀';
+                }
+              }
+            });
+          }
+        })
+        .catch(err => console.error('輪詢失敗:', err));
+    }
+
+    // 發送訊息
+    function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const content = input.value.trim();
+      if (!content || !currentFriendId) return;
+      
+      input.disabled = true;
+      document.getElementById('sendBtn').disabled = true;
+      
+      fetch('chat_api.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'action=send_message&friend_id=' + currentFriendId + '&content=' + encodeURIComponent(content)
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            input.value = '';
+            // 訊息會透過輪詢自動顯示
+          } else {
+            alert(data.message);
+          }
+        })
+        .catch(err => alert('發送失敗'))
+        .finally(() => {
+          input.disabled = false;
+          document.getElementById('sendBtn').disabled = false;
+          input.focus();
+        });
+    }
+
+    // 發送按鈕
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+
+    // Enter 鍵發送
+    document.getElementById('chatInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // 語音錄製
+    document.getElementById('voiceBtn').addEventListener('click', async function() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        return; // 已在錄音中
+      }
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach(track => track.stop());
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          uploadVoice(blob);
+        };
+        
+        mediaRecorder.start();
+        recordingStartTime = Date.now();
+        document.getElementById('recordingIndicator').classList.add('active');
+        this.disabled = true;
+        
+        // 更新錄音時間
+        recordingTimer = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+          const min = Math.floor(elapsed / 60);
+          const sec = elapsed % 60;
+          document.getElementById('recordingTime').textContent = min + ':' + (sec < 10 ? '0' : '') + sec;
+        }, 1000);
+        
+      } catch (err) {
+        alert('無法存取麥克風');
+      }
+    });
+
+    // 停止錄音
+    document.getElementById('stopRecordingBtn').addEventListener('click', function() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        clearInterval(recordingTimer);
+        document.getElementById('recordingIndicator').classList.remove('active');
+        document.getElementById('voiceBtn').disabled = false;
+      }
+    });
+
+    // 上傳語音
+    function uploadVoice(blob) {
+      const formData = new FormData();
+      formData.append('action', 'upload_voice');
+      formData.append('friend_id', currentFriendId);
+      formData.append('voice', blob, 'voice.webm');
+      
+      fetch('chat_api.php', {
+        method: 'POST',
+        body: formData
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) {
+            alert(data.message);
+          }
+        })
+        .catch(err => alert('語音上傳失敗'));
+    }
+
+    // 滾動到底部
+    function scrollToBottom() {
+      const container = document.getElementById('chatMessages');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // HTML 跳脫
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
 </body>
 </html>
