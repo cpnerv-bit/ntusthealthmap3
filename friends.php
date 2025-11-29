@@ -69,10 +69,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if (!$stmt->fetch()) {
                 $error = '你不在此團隊中';
             } else {
-                // 將好友加入團隊
-                $stmt = $pdo->prepare('INSERT IGNORE INTO team_members (team_id, user_id, role) VALUES (?, ?, "member")');
+                // 確認對方不在此團隊
+                $stmt = $pdo->prepare('SELECT * FROM team_members WHERE team_id = ? AND user_id = ?');
                 $stmt->execute([$team_id, $friend_id]);
-                $message = '已邀請好友加入團隊';
+                if ($stmt->fetch()) {
+                    $error = '對方已經在此團隊中';
+                } else {
+                    // 確認沒有待處理的邀請
+                    $stmt = $pdo->prepare('SELECT * FROM team_invites WHERE team_id = ? AND invitee_id = ? AND status = "pending"');
+                    $stmt->execute([$team_id, $friend_id]);
+                    if ($stmt->fetch()) {
+                        $error = '已經發送過邀請，請等待對方回覆';
+                    } else {
+                        // 發送團隊邀請
+                        $stmt = $pdo->prepare('INSERT INTO team_invites (team_id, inviter_id, invitee_id, status) VALUES (?, ?, ?, "pending")');
+                        $stmt->execute([$team_id, $user_id, $friend_id]);
+                        $message = '已發送團隊邀請，等待對方確認';
+                    }
+                }
             }
         }
     } elseif ($_POST['action'] === 'delete_friend') {
@@ -109,6 +123,33 @@ $pending_requests = $stmt->fetchAll();
 $stmt = $pdo->prepare('SELECT t.team_id, t.name FROM teams t JOIN team_members tm ON t.team_id = tm.team_id WHERE tm.user_id = ?');
 $stmt->execute([$user_id]);
 $my_teams = $stmt->fetchAll();
+
+// 為每個好友計算可邀請的團隊（排除好友已加入的團隊，以及好友是擁有者的團隊）
+$friend_available_teams = [];
+foreach ($friends as $friend) {
+    $friend_id = $friend['user_id'];
+    // 獲取好友已加入的團隊 ID
+    $stmt = $pdo->prepare('SELECT team_id FROM team_members WHERE user_id = ?');
+    $stmt->execute([$friend_id]);
+    $friend_team_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    // 獲取好友是擁有者的團隊 ID
+    $stmt = $pdo->prepare('SELECT team_id FROM team_members WHERE user_id = ? AND role = "owner"');
+    $stmt->execute([$friend_id]);
+    $friend_owner_team_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    // 合併排除的團隊 ID
+    $excluded_team_ids = array_unique(array_merge($friend_team_ids, $friend_owner_team_ids));
+    
+    // 過濾出可邀請的團隊
+    $available_teams = [];
+    foreach ($my_teams as $team) {
+        if (!in_array($team['team_id'], $excluded_team_ids)) {
+            $available_teams[] = $team;
+        }
+    }
+    $friend_available_teams[$friend_id] = $available_teams;
+}
 ?>
 <!doctype html>
 <html lang="zh-TW">
@@ -218,20 +259,21 @@ $my_teams = $stmt->fetchAll();
             <?php else: ?>
               <div class="list-group" style="overflow: visible;">
                 <?php foreach ($friends as $friend): ?>
+                  <?php $available_teams = $friend_available_teams[$friend['user_id']] ?? []; ?>
                   <div class="list-group-item d-flex justify-content-between align-items-center" style="overflow: visible;">
                     <div>
                       <i class="fas fa-user-circle me-2 text-primary"></i>
                       <strong><?php echo htmlspecialchars($friend['display_name'] ?? $friend['username']); ?></strong>
                       <small class="text-muted">(@<?php echo htmlspecialchars($friend['username']); ?>)</small>
                     </div>
-                    <?php if (count($my_teams) > 0): ?>
+                    <?php if (count($available_teams) > 0): ?>
                     <div class="d-flex gap-2" style="overflow: visible;">
                       <div class="dropdown">
                         <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                           <i class="fas fa-user-plus me-1"></i>邀請加入團隊
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" style="z-index: 1050;">
-                          <?php foreach ($my_teams as $team): ?>
+                          <?php foreach ($available_teams as $team): ?>
                             <li>
                               <form method="post" class="dropdown-item-form">
                                 <input type="hidden" name="action" value="invite_to_team">

@@ -32,12 +32,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="assets/styles.css" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden !important;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
 </head>
 <body class="auth-page">
-  <div class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
-    <div class="row justify-content-center w-100">
-      <div class="col-11 col-sm-10 col-md-8 col-lg-5 col-xl-4">
-        <div class="auth-card">
+  <div class="auth-card">
           <div class="auth-logo">
             <i class="fas fa-heartbeat"></i>
           </div>
@@ -69,9 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="auth-footer">
       <span class="text-muted">還沒有帳號？</span>
       <a href="register.php">立即註冊</a>
-    </div>
-        </div>
-      </div>
     </div>
   </div>
 

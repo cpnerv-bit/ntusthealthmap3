@@ -10,6 +10,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $display = trim($_POST['display_name'] ?? '');
+    
+    // 處理出生日期
+    $birth_year = (int)($_POST['birth_year'] ?? 0);
+    $birth_month = (int)($_POST['birth_month'] ?? 0);
+    $birth_day = (int)($_POST['birth_day'] ?? 0);
+    $birth_date = null;
+    
+    if ($birth_year > 0 && $birth_month > 0 && $birth_day > 0) {
+        // 驗證日期有效性
+        if (checkdate($birth_month, $birth_day, $birth_year)) {
+            $birth_date = sprintf('%04d-%02d-%02d', $birth_year, $birth_month, $birth_day);
+        }
+    }
 
     if ($username === '' || $password === '') {
         $error = '請填寫帳號與密碼';
@@ -21,8 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '帳號已被使用';
         } else {
             $hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare('INSERT INTO users (username,password_hash,display_name) VALUES (?,?,?)');
-            $stmt->execute([$username, $hash, $display]);
+            $stmt = $pdo->prepare('INSERT INTO users (username,password_hash,display_name,birth_date) VALUES (?,?,?,?)');
+            $stmt->execute([$username, $hash, $display, $birth_date]);
             header('Location: login.php'); exit;
         }
     }
@@ -37,12 +50,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="assets/styles.css" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden !important;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
 </head>
 <body class="auth-page">
-  <div class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
-    <div class="row justify-content-center w-100">
-      <div class="col-11 col-sm-10 col-md-8 col-lg-5 col-xl-4">
-        <div class="auth-card">
+  <div class="auth-card">
           <div class="auth-logo">
             <i class="fas fa-user-plus"></i>
           </div>
@@ -68,6 +87,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="form-label">顯示名稱 <span class="text-muted">(選填)</span></label>
         <input name="display_name" class="form-control" placeholder="其他人會看到的名稱">
       </div>
+      
+      <div class="mb-3">
+        <label class="form-label">出生日期 <span class="text-muted">(選填)</span></label>
+        <div class="row g-2">
+          <div class="col-4">
+            <select name="birth_year" class="form-select">
+              <option value="">年</option>
+              <?php
+              $current_year = date('Y');
+              for ($y = $current_year; $y >= $current_year - 100; $y--) {
+                echo "<option value=\"$y\">$y</option>";
+              }
+              ?>
+            </select>
+          </div>
+          <div class="col-4">
+            <select name="birth_month" class="form-select">
+              <option value="">月</option>
+              <?php for ($m = 1; $m <= 12; $m++): ?>
+                <option value="<?php echo $m; ?>"><?php echo $m; ?></option>
+              <?php endfor; ?>
+            </select>
+          </div>
+          <div class="col-4">
+            <select name="birth_day" class="form-select">
+              <option value="">日</option>
+              <?php for ($d = 1; $d <= 31; $d++): ?>
+                <option value="<?php echo $d; ?>"><?php echo $d; ?></option>
+              <?php endfor; ?>
+            </select>
+          </div>
+        </div>
+        <small class="text-muted d-block mt-1">
+          <i class="fas fa-info-circle me-1"></i>此僅為計算年齡參照運動基準使用
+        </small>
+      </div>
+      
       <div class="d-grid">
         <button type="submit" class="btn btn-primary btn-lg">
           <i class="fas fa-check-circle me-2"></i>註冊
@@ -78,9 +134,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="auth-footer">
       <span class="text-muted">已經有帳號？</span>
       <a href="login.php">立即登入</a>
-    </div>
-        </div>
-      </div>
     </div>
   </div>
 
