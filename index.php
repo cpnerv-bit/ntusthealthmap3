@@ -9,6 +9,13 @@ $stmt = $pdo->prepare('SELECT user_id, username, display_name, points, money, bi
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
+// 如果找不到使用者，登出並重新導向到登入頁面
+if (!$user) {
+    session_destroy();
+    header('Location: login.php');
+    exit;
+}
+
 // 計算使用者年齡並取得運動建議
 $user_age = calculate_age($user['birth_date'] ?? null);
 $exercise_rec = get_exercise_recommendations($user_age);

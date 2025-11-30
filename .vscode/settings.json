@@ -1,0 +1,9 @@
+{
+  "files.associations": {
+    "*.sql": "mysql"
+  },
+  "sqltools.autoOpenSessionFiles": false,
+  "[sql]": {
+    "editor.defaultFormatter": null
+  }
+}

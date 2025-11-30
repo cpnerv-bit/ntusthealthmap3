@@ -138,7 +138,7 @@ foreach ($teams as $team) {
   }
   
   // 獲取任務
-  $stmt = $pdo->prepare('SELECT team_id,title,points,created_at FROM team_tasks WHERE team_id=? AND completed_at IS NULL ORDER BY created_at');
+  $stmt = $pdo->prepare('SELECT task_id,team_id,title,points,created_at FROM team_tasks WHERE team_id=? AND completed_at IS NULL ORDER BY created_at');
   $stmt->execute([$team['id']]);
   $tasks = $stmt->fetchAll();
   
@@ -318,8 +318,7 @@ foreach ($teams as $team) {
                 </h6>
                 <div id="team-tasks-<?php echo $team['id']; ?>" class="row row-cols-1 row-cols-md-3 g-3 mb-4">
                   <?php foreach($tasks as $t): ?>
-                    <?php $task_key = $t['team_id'] . '|' . rawurlencode($t['created_at']); ?>
-                    <div class="col" id="task-card-<?php echo htmlspecialchars($task_key); ?>">
+                    <div class="col" id="task-card-<?php echo (int)$t['task_id']; ?>">
                       <div class="card h-100" style="border-left: 4px solid var(--primary);">
                         <div class="card-body d-flex flex-column">
                           <h6 class="card-title mb-2">
@@ -329,7 +328,7 @@ foreach ($teams as $team) {
                             <i class="fas fa-trophy me-1"></i>獎勵：<strong><?php echo (int)$t['points']; ?></strong> 點
                           </p>
                           <div class="mt-auto">
-                            <button data-team-id="<?php echo (int)$t['team_id']; ?>" data-created-at="<?php echo htmlspecialchars($t['created_at']); ?>" class="btn btn-sm btn-primary btn-complete w-100">
+                            <button data-task-id="<?php echo (int)$t['task_id']; ?>" class="btn btn-sm btn-primary btn-complete w-100">
                               <i class="fas fa-check-circle me-1"></i>完成
                             </button>
                           </div>
@@ -421,24 +420,20 @@ foreach ($teams as $team) {
     document.addEventListener('click', function(e){
       if (e.target && e.target.classList.contains('btn-complete')) {
         e.target.disabled = true;
-        const teamId = e.target.getAttribute('data-team-id');
-        const createdAt = e.target.getAttribute('data-created-at');
+        const taskId = e.target.getAttribute('data-task-id');
         const form = new FormData();
-        form.append('team_id', teamId);
-        form.append('created_at', createdAt);
+        form.append('task_id', taskId);
         fetch('complete_task.php', { method: 'POST', body: form })
           .then(r=>r.json())
           .then(js=>{
             if (js.success) {
-              // replace the card using composite key
-              const oldKey = teamId + '|' + encodeURIComponent(createdAt);
-              const oldCard = document.getElementById('task-card-' + oldKey);
+              // replace the card using task_id
+              const oldCard = document.getElementById('task-card-' + taskId);
               if (oldCard) {
                 const nt = js.new_task;
-                const newKey = nt.team_id + '|' + encodeURIComponent(nt.created_at);
                 const col = document.createElement('div');
                 col.className = 'col';
-                col.id = 'task-card-' + newKey;
+                col.id = 'task-card-' + nt.task_id;
                 col.innerHTML = `
                   <div class="card h-100" style="border-left: 4px solid var(--primary);">
                     <div class="card-body d-flex flex-column">
@@ -449,7 +444,7 @@ foreach ($teams as $team) {
                         <i class="fas fa-trophy me-1"></i>獎勵：<strong>${nt.points}</strong> 點
                       </p>
                       <div class="mt-auto">
-                        <button data-team-id="${nt.team_id}" data-created-at="${nt.created_at}" class="btn btn-sm btn-primary btn-complete w-100">
+                        <button data-task-id="${nt.task_id}" class="btn btn-sm btn-primary btn-complete w-100">
                           <i class="fas fa-check-circle me-1"></i>完成
                         </button>
                       </div>

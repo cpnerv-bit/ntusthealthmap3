@@ -4,9 +4,8 @@ require_login();
 header('Content-Type: application/json; charset=utf-8');
 
 $user_id = $_SESSION['user_id'];
-$team_id = (int)($_POST['team_id'] ?? 0);
-$created_at = trim($_POST['created_at'] ?? '');
-if (!$team_id || $created_at === '') {
+$task_id = (int)($_POST['task_id'] ?? 0);
+if (!$task_id) {
     echo json_encode(['success'=>false,'error'=>'invalid_task']);
     exit;
 }
@@ -14,9 +13,9 @@ if (!$team_id || $created_at === '') {
 try {
     $pdo->beginTransaction();
 
-    // lock the task by composite key
-    $stmt = $pdo->prepare('SELECT team_id,title,points,completed_at,created_at FROM team_tasks WHERE team_id=? AND created_at=? FOR UPDATE');
-    $stmt->execute([$team_id, $created_at]);
+    // lock the task by task_id
+    $stmt = $pdo->prepare('SELECT task_id,team_id,title,points,completed_at FROM team_tasks WHERE task_id=? FOR UPDATE');
+    $stmt->execute([$task_id]);
     $task = $stmt->fetch();
     if (!$task) {
         $pdo->rollBack();
@@ -27,6 +26,8 @@ try {
         echo json_encode(['success'=>false,'error'=>'already_completed']); exit;
     }
 
+    $team_id = (int)$task['team_id'];
+
     // check user belongs to team
     $stmt = $pdo->prepare('SELECT 1 FROM team_members WHERE team_id=? AND user_id=? LIMIT 1');
     $stmt->execute([$team_id,$user_id]);
@@ -36,8 +37,8 @@ try {
     }
 
     // mark completed
-    $upd = $pdo->prepare('UPDATE team_tasks SET completed_by=?, completed_at=NOW() WHERE team_id=? AND created_at=?');
-    $upd->execute([$user_id,$team_id,$created_at]);
+    $upd = $pdo->prepare('UPDATE team_tasks SET completed_by=?, completed_at=NOW() WHERE task_id=?');
+    $upd->execute([$user_id,$task_id]);
 
     // award points to user
     $pts = (int)$task['points'];
@@ -60,11 +61,8 @@ try {
     $ins = $pdo->prepare('INSERT INTO team_tasks (team_id,title,points) VALUES (?,?,?)');
     $ins->execute([$team_id,$pick['title'],$pick['points']]);
 
-    // fetch created_at of the newly inserted row
-    $stmt = $pdo->prepare('SELECT created_at FROM team_tasks WHERE team_id=? ORDER BY created_at DESC LIMIT 1');
-    $stmt->execute([$team_id]);
-    $new_row = $stmt->fetch();
-    $new_created_at = $new_row['created_at'] ?? null;
+    // get the new task_id
+    $new_task_id = (int)$pdo->lastInsertId();
 
     $pdo->commit();
 
@@ -72,8 +70,8 @@ try {
         'success'=>true,
         'awarded_points'=>$pts,
         'new_task'=>[
+            'task_id'=>$new_task_id,
             'team_id'=>$team_id,
-            'created_at'=>$new_created_at,
             'title'=>$pick['title'],
             'points'=>$pick['points']
         ]
