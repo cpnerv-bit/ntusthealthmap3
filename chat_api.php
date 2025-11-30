@@ -55,8 +55,8 @@ switch ($action) {
         // 標記對方發送的訊息為已讀
         $stmt = $pdo->prepare('
             UPDATE chat_messages 
-            SET is_read = 1, read_at = NOW() 
-            WHERE sender_id = ? AND receiver_id = ? AND is_read = 0
+            SET is_read = "Read", read_at = NOW() 
+            WHERE sender_id = ? AND receiver_id = ? AND is_read = "Unread"
         ');
         $stmt->execute([$friend_id, $user_id]);
         
@@ -165,7 +165,7 @@ switch ($action) {
         $stmt = $pdo->prepare('
             SELECT sender_id, COUNT(*) as unread_count 
             FROM chat_messages 
-            WHERE receiver_id = ? AND is_read = 0 
+            WHERE receiver_id = ? AND is_read = "Unread" 
             GROUP BY sender_id
         ');
         $stmt->execute([$user_id]);
@@ -206,8 +206,8 @@ switch ($action) {
         if (count($messages) > 0) {
             $stmt = $pdo->prepare('
                 UPDATE chat_messages 
-                SET is_read = 1, read_at = NOW() 
-                WHERE sender_id = ? AND receiver_id = ? AND is_read = 0
+                SET is_read = "Read", read_at = NOW() 
+                WHERE sender_id = ? AND receiver_id = ? AND is_read = "Unread"
             ');
             $stmt->execute([$friend_id, $user_id]);
         }
@@ -215,7 +215,7 @@ switch ($action) {
         // 檢查自己發送的訊息是否已讀
         $stmt = $pdo->prepare('
             SELECT message_id, is_read FROM chat_messages 
-            WHERE sender_id = ? AND receiver_id = ? AND is_read = 1
+            WHERE sender_id = ? AND receiver_id = ? AND is_read = "Read"
         ');
         $stmt->execute([$user_id, $friend_id]);
         $read_status = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS `chat_messages` (
   `receiver_id` INT NOT NULL,
   `message_type` ENUM('text', 'voice') DEFAULT 'text' COMMENT '訊息類型：文字或語音',
   `content` TEXT NOT NULL COMMENT '文字訊息內容或語音檔案路徑',
-  `is_read` TINYINT(1) DEFAULT 0 COMMENT '是否已讀：0=未讀, 1=已讀',
+  `is_read` ENUM('Unread', 'Read') DEFAULT 'Unread',
   `read_at` TIMESTAMP NULL COMMENT '已讀時間',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_cm_sender` FOREIGN KEY (`sender_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,

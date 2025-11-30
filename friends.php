@@ -600,7 +600,7 @@ foreach ($friends as $friend) {
       
       div.innerHTML = content + 
         '<div class="message-time">' + time + '</div>' +
-        (isSent ? '<div class="message-read-status">' + (parseInt(msg.is_read) ? '已讀' : '') + '</div>' : '');
+        (isSent ? '<div class="message-read-status">' + (msg.is_read === 'Read' ? '已讀' : '') + '</div>' : '');
       
       container.appendChild(div);
     }
