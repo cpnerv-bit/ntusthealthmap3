@@ -34,6 +34,17 @@ $stmt = $pdo->prepare('
 $stmt->execute([$user_id, $start_date, $end_date]);
 $activity_summary = $stmt->fetch();
 
+// 查詢團隊任務獲得的點數
+$stmt = $pdo->prepare('
+    SELECT SUM(amount) as total_task_points
+    FROM points_logs 
+    WHERE user_id = ? 
+    AND source = "team_task"
+    AND DATE(created_at) BETWEEN ? AND ?
+');
+$stmt->execute([$user_id, $start_date, $end_date]);
+$task_summary = $stmt->fetch();
+
 // 查詢建築相關獲得的金錢（解鎖 + 升級）
 $stmt = $pdo->prepare('
     SELECT SUM(amount) as total_building_money
@@ -45,7 +56,9 @@ $stmt = $pdo->prepare('
 $stmt->execute([$user_id, $start_date, $end_date]);
 $building_summary = $stmt->fetch();
 
-$total_points = (int)($activity_summary['total_points'] ?? 0);
+$activity_points = (int)($activity_summary['total_points'] ?? 0);
+$task_points = (int)($task_summary['total_task_points'] ?? 0);
+$total_points = $activity_points + $task_points;
 $total_money = (int)($building_summary['total_building_money'] ?? 0);
 
 // 查詢活動每日點數明細
@@ -60,6 +73,20 @@ $stmt = $pdo->prepare('
 ');
 $stmt->execute([$user_id, $start_date, $end_date]);
 $activity_records = $stmt->fetchAll();
+
+// 查詢團隊任務每日點數明細
+$stmt = $pdo->prepare('
+    SELECT 
+        DATE(created_at) as record_date,
+        SUM(amount) as daily_points
+    FROM points_logs 
+    WHERE user_id = ? 
+    AND source = "team_task"
+    AND DATE(created_at) BETWEEN ? AND ?
+    GROUP BY DATE(created_at)
+');
+$stmt->execute([$user_id, $start_date, $end_date]);
+$task_records = $stmt->fetchAll();
 
 // 查詢建築每日金錢明細
 $stmt = $pdo->prepare('
@@ -80,14 +107,21 @@ $daily_data = [];
 foreach ($activity_records as $r) {
     $date = $r['record_date'];
     if (!isset($daily_data[$date])) {
-        $daily_data[$date] = ['points' => 0, 'money' => 0];
+        $daily_data[$date] = ['activity_points' => 0, 'task_points' => 0, 'money' => 0];
     }
-    $daily_data[$date]['points'] += (int)$r['daily_points'];
+    $daily_data[$date]['activity_points'] += (int)$r['daily_points'];
+}
+foreach ($task_records as $r) {
+    $date = $r['record_date'];
+    if (!isset($daily_data[$date])) {
+        $daily_data[$date] = ['activity_points' => 0, 'task_points' => 0, 'money' => 0];
+    }
+    $daily_data[$date]['task_points'] += (int)$r['daily_points'];
 }
 foreach ($building_records as $r) {
     $date = $r['record_date'];
     if (!isset($daily_data[$date])) {
-        $daily_data[$date] = ['points' => 0, 'money' => 0];
+        $daily_data[$date] = ['activity_points' => 0, 'task_points' => 0, 'money' => 0];
     }
     $daily_data[$date]['money'] += (int)$r['daily_money'];
 }
@@ -162,15 +196,23 @@ krsort($daily_data);
 
             <!-- 統計摘要 -->
             <div class="row g-3 mb-4">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <div class="card bg-primary text-white">
                   <div class="card-body text-center">
-                    <h3 class="mb-1"><?php echo number_format($total_points); ?></h3>
-                    <div><i class="fas fa-star me-1"></i>獲得點數</div>
+                    <h3 class="mb-1"><?php echo number_format($activity_points); ?></h3>
+                    <div><i class="fas fa-running me-1"></i>活動點數</div>
                   </div>
                 </div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
+                <div class="card bg-info text-white">
+                  <div class="card-body text-center">
+                    <h3 class="mb-1"><?php echo number_format($task_points); ?></h3>
+                    <div><i class="fas fa-tasks me-1"></i>團隊任務點數</div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
                 <div class="card bg-success text-white">
                   <div class="card-body text-center">
                     <h3 class="mb-1"><?php echo number_format($total_money); ?></h3>
@@ -188,7 +230,8 @@ krsort($daily_data);
                 <thead>
                   <tr>
                     <th class="text-center">日期</th>
-                    <th class="text-center">獲得點數</th>
+                    <th class="text-center">活動點數</th>
+                    <th class="text-center">團隊任務點數</th>
                     <th class="text-center">獲得金錢</th>
                   </tr>
                 </thead>
@@ -198,7 +241,12 @@ krsort($daily_data);
                     <td class="text-center"><?php echo htmlspecialchars($date); ?></td>
                     <td class="text-center">
                       <span class="text-primary">
-                        <i class="fas fa-star me-1"></i><?php echo number_format($data['points']); ?>
+                        <i class="fas fa-running me-1"></i><?php echo number_format($data['activity_points']); ?>
+                      </span>
+                    </td>
+                    <td class="text-center">
+                      <span class="text-info">
+                        <i class="fas fa-tasks me-1"></i><?php echo number_format($data['task_points']); ?>
                       </span>
                     </td>
                     <td class="text-center">
