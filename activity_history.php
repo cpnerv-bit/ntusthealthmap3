@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/age_standards.php';
 require_login();
 
 $user_id = $_SESSION['user_id'];
@@ -29,18 +30,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $water_ml = (int)($_POST['water_ml'] ?? 0);
         
         if ($activity_id > 0 && $activity_date) {
-            $stmt = $pdo->prepare('UPDATE activities SET activity_date = ?, steps = ?, time_minutes = ?, water_ml = ? WHERE activity_id = ? AND user_id = ?');
-            $stmt->execute([$activity_date, $steps, $time_minutes, $water_ml, $activity_id, $user_id]);
-            if ($stmt->rowCount() > 0) {
-                // 修改成功後重導向，避免停留在編輯頁面
-                $redirect_url = 'activity_history.php?updated=1';
-                if ($filter_year !== '' || $filter_month !== '' || $filter_day !== '') {
-                    $redirect_url = 'activity_history.php?updated=1&year=' . urlencode($_POST['filter_year'] ?? '') . '&month=' . urlencode($_POST['filter_month'] ?? '') . '&day=' . urlencode($_POST['filter_day'] ?? '');
+            // 先取得舊的點數
+            $stmt = $pdo->prepare('SELECT points_earned FROM activities WHERE activity_id = ? AND user_id = ?');
+            $stmt->execute([$activity_id, $user_id]);
+            $old_record = $stmt->fetch();
+            $old_points = (int)($old_record['points_earned'] ?? 0);
+            
+            // 取得使用者出生日期，計算年齡
+            $stmt = $pdo->prepare('SELECT birth_date FROM users WHERE user_id = ?');
+            $stmt->execute([$user_id]);
+            $user_data = $stmt->fetch();
+            $birth_date = $user_data['birth_date'] ?? null;
+            $age = calculate_age($birth_date);
+            
+            // 根據新數據重新計算點數
+            $points_result = calculate_points_by_age($age, $steps, $time_minutes, $water_ml);
+            $new_points = $points_result['total'];
+            $points_diff = $new_points - $old_points;
+            
+            try {
+                $pdo->beginTransaction();
+                
+                // 更新活動記錄（包含新的點數）
+                $stmt = $pdo->prepare('UPDATE activities SET activity_date = ?, steps = ?, time_minutes = ?, water_ml = ?, points_earned = ? WHERE activity_id = ? AND user_id = ?');
+                $stmt->execute([$activity_date, $steps, $time_minutes, $water_ml, $new_points, $activity_id, $user_id]);
+                
+                // 更新使用者總點數（加上差額）
+                if ($points_diff != 0) {
+                    $stmt = $pdo->prepare('UPDATE users SET points = points + ? WHERE user_id = ?');
+                    $stmt->execute([$points_diff, $user_id]);
                 }
-                header('Location: ' . $redirect_url);
-                exit;
-            } else {
-                $error = '修改失敗，記錄可能不存在';
+                
+                $pdo->commit();
+                
+                if ($stmt->rowCount() > 0 || $points_diff != 0) {
+                    // 修改成功後重導向，避免停留在編輯頁面
+                    $redirect_url = 'activity_history.php?updated=1';
+                    if ($filter_year !== '' || $filter_month !== '' || $filter_day !== '') {
+                        $redirect_url = 'activity_history.php?updated=1&year=' . urlencode($_POST['filter_year'] ?? '') . '&month=' . urlencode($_POST['filter_month'] ?? '') . '&day=' . urlencode($_POST['filter_day'] ?? '');
+                    }
+                    header('Location: ' . $redirect_url);
+                    exit;
+                } else {
+                    $error = '修改失敗，記錄可能不存在';
+                }
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = '修改失敗: ' . $e->getMessage();
             }
         }
     }
@@ -256,7 +292,6 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                       <th class="text-center align-middle"><i class="fas fa-shoe-prints me-1"></i>步數</th>
                       <th class="text-center align-middle"><i class="fas fa-clock me-1"></i>運動時間</th>
                       <th class="text-center align-middle"><i class="fas fa-tint me-1"></i>喝水量</th>
-                      <th class="text-center align-middle"><i class="fas fa-star me-1"></i>點數獲得</th>
                       <th class="d-none edit-action-col text-center align-middle">操作</th>
                     </tr>
                   </thead>
@@ -270,7 +305,6 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                         <td class="text-center align-middle"><?php echo number_format($act['steps']); ?></td>
                         <td class="text-center align-middle"><?php echo (int)$act['time_minutes']; ?> 分鐘</td>
                         <td class="text-center align-middle"><?php echo number_format($act['water_ml']); ?> ml</td>
-                        <td class="text-center align-middle"><?php echo number_format($act['points_earned']); ?> 點</td>
                         <td class="d-none edit-action-col text-center align-middle">
                           <a href="activity_history.php?edit=<?php echo $act['activity_id']; ?>&year=<?php echo urlencode($filter_year); ?>&month=<?php echo urlencode($filter_month); ?>&day=<?php echo urlencode($filter_day); ?>" class="btn btn-outline-warning btn-sm edit-btn">
                             <i class="fas fa-pen"></i>

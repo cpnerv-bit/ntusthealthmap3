@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS `team_tasks` (
   CONSTRAINT `fk_tt_user` FOREIGN KEY (`completed_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `task_confirmations` (
+  `task_id` INT NOT NULL,
+  `user_id` INT NOT NULL,
+  `confirmed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_id`, `user_id`),
+  CONSTRAINT `fk_tc_task` FOREIGN KEY (`task_id`) REFERENCES `team_tasks`(`task_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_tc_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO `buildings` (`building_id`,`name`,`lat`,`lng`,`description`,`unlock_cost`,`reward_money`) VALUES
 (1,'AAEON Building (研揚大樓)',25.0150423,121.5427957,'研揚大樓 (AAEON Building)',20,10),
 (2,'醫揚大樓',25.0146042,121.5431905,'醫揚大樓',18,9),

@@ -142,6 +142,15 @@ foreach ($teams as $team) {
   $stmt->execute([$team['id']]);
   $tasks = $stmt->fetchAll();
   
+  // 獲取每個任務的確認狀態
+  $task_confirmations = [];
+  foreach ($tasks as $t) {
+    $stmt = $pdo->prepare('SELECT user_id FROM task_confirmations WHERE task_id=?');
+    $stmt->execute([$t['task_id']]);
+    $confirmed_users = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $task_confirmations[$t['task_id']] = $confirmed_users;
+  }
+  
   // 獲取成員
   $stmt = $pdo->prepare('SELECT u.user_id AS id,u.username,u.display_name,tm.role FROM team_members tm JOIN users u ON tm.user_id=u.user_id WHERE tm.team_id=?');
   $stmt->execute([$team['id']]);
@@ -157,7 +166,8 @@ foreach ($teams as $team) {
     'team' => $team,
     'tasks' => $tasks,
     'members' => $members,
-    'my_role' => $my_role
+    'my_role' => $my_role,
+    'task_confirmations' => $task_confirmations
   ];
 }
 ?>
@@ -317,20 +327,37 @@ foreach ($teams as $team) {
                   <span class="badge bg-primary ms-2"><?php echo count($tasks); ?>個任務</span>
                 </h6>
                 <div id="team-tasks-<?php echo $team['id']; ?>" class="row row-cols-1 row-cols-md-3 g-3 mb-4">
-                  <?php foreach($tasks as $t): ?>
-                    <div class="col" id="task-card-<?php echo (int)$t['task_id']; ?>">
+                  <?php foreach($tasks as $t): 
+                    $task_id = (int)$t['task_id'];
+                    $confirmed_users = $data['task_confirmations'][$task_id] ?? [];
+                    $confirmed_count = count($confirmed_users);
+                    $total_members = count($members);
+                    $user_confirmed = in_array($user_id, $confirmed_users);
+                  ?>
+                    <div class="col" id="task-card-<?php echo $task_id; ?>">
                       <div class="card h-100" style="border-left: 4px solid var(--primary);">
                         <div class="card-body d-flex flex-column">
                           <h6 class="card-title mb-2">
                             <i class="fas fa-clipboard-check me-2"></i><?php echo htmlspecialchars($t['title']); ?>
                           </h6>
-                          <p class="mb-3 text-muted">
+                          <p class="mb-2 text-muted">
                             <i class="fas fa-trophy me-1"></i>獎勵：<strong><?php echo (int)$t['points']; ?></strong> 點
                           </p>
                           <div class="mt-auto">
-                            <button data-task-id="<?php echo (int)$t['task_id']; ?>" class="btn btn-sm btn-primary btn-complete w-100">
-                              <i class="fas fa-check-circle me-1"></i>完成
-                            </button>
+                            <div class="text-center mb-2">
+                              <span class="badge bg-info">
+                                <i class="fas fa-users me-1"></i>完成人數：<?php echo $confirmed_count; ?>/<?php echo $total_members; ?>
+                              </span>
+                            </div>
+                            <?php if ($user_confirmed): ?>
+                              <button class="btn btn-sm btn-success w-100" disabled>
+                                <i class="fas fa-check me-1"></i>已確認
+                              </button>
+                            <?php else: ?>
+                              <button data-task-id="<?php echo $task_id; ?>" data-total="<?php echo $total_members; ?>" class="btn btn-sm btn-primary btn-complete w-100">
+                                <i class="fas fa-check-circle me-1"></i>確認完成
+                              </button>
+                            <?php endif; ?>
                           </div>
                         </div>
                       </div>
@@ -420,54 +447,91 @@ foreach ($teams as $team) {
     document.addEventListener('click', function(e){
       if (e.target && e.target.classList.contains('btn-complete')) {
         e.target.disabled = true;
-        const taskId = e.target.getAttribute('data-task-id');
+        const btn = e.target;
+        const taskId = btn.getAttribute('data-task-id');
+        const totalMembers = parseInt(btn.getAttribute('data-total')) || 1;
         const form = new FormData();
         form.append('task_id', taskId);
         fetch('complete_task.php', { method: 'POST', body: form })
           .then(r=>r.json())
           .then(js=>{
             if (js.success) {
-              // replace the card using task_id
-              const oldCard = document.getElementById('task-card-' + taskId);
-              if (oldCard) {
-                const nt = js.new_task;
-                const col = document.createElement('div');
-                col.className = 'col';
-                col.id = 'task-card-' + nt.task_id;
-                col.innerHTML = `
-                  <div class="card h-100" style="border-left: 4px solid var(--primary);">
-                    <div class="card-body d-flex flex-column">
-                      <h6 class="card-title mb-2">
-                        <i class="fas fa-clipboard-check me-2"></i>${escapeHtml(nt.title)}
-                      </h6>
-                      <p class="mb-3 text-muted">
-                        <i class="fas fa-trophy me-1"></i>獎勵：<strong>${nt.points}</strong> 點
-                      </p>
-                      <div class="mt-auto">
-                        <button data-task-id="${nt.task_id}" class="btn btn-sm btn-primary btn-complete w-100">
-                          <i class="fas fa-check-circle me-1"></i>完成
-                        </button>
+              if (js.task_completed) {
+                // 所有成員都確認了，任務完成
+                const oldCard = document.getElementById('task-card-' + taskId);
+                if (oldCard) {
+                  const nt = js.new_task;
+                  const col = document.createElement('div');
+                  col.className = 'col';
+                  col.id = 'task-card-' + nt.task_id;
+                  col.innerHTML = `
+                    <div class="card h-100" style="border-left: 4px solid var(--primary);">
+                      <div class="card-body d-flex flex-column">
+                        <h6 class="card-title mb-2">
+                          <i class="fas fa-clipboard-check me-2"></i>${escapeHtml(nt.title)}
+                        </h6>
+                        <p class="mb-2 text-muted">
+                          <i class="fas fa-trophy me-1"></i>獎勵：<strong>${nt.points}</strong> 點
+                        </p>
+                        <div class="mt-auto">
+                          <div class="text-center mb-2">
+                            <span class="badge bg-info">
+                              <i class="fas fa-users me-1"></i>完成人數：0/${totalMembers}
+                            </span>
+                          </div>
+                          <button data-task-id="${nt.task_id}" data-total="${totalMembers}" class="btn btn-sm btn-primary btn-complete w-100">
+                            <i class="fas fa-check-circle me-1"></i>確認完成
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                `;
-                oldCard.replaceWith(col);
+                  `;
+                  oldCard.replaceWith(col);
+                }
+                showTempAlert('🎉 所有成員都已確認！任務完成，每人獲得 ' + js.awarded_points + ' 點', 'success');
+              } else {
+                // 還有成員未確認，更新按鈕狀態
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>已確認';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
+                btn.disabled = true;
+                
+                // 更新確認進度
+                const card = document.getElementById('task-card-' + taskId);
+                if (card) {
+                  const badge = card.querySelector('.badge.bg-info');
+                  if (badge) {
+                    badge.innerHTML = `<i class="fas fa-users me-1"></i>完成人數：${js.confirmed_count}/${js.total_members}`;
+                  }
+                }
+                
+                showTempAlert(js.message, 'info');
               }
-              // show awarded points
-              showTempAlert('任務完成，獲得 ' + js.awarded_points + ' 點');
             } else {
-              showTempAlert('任務無法完成：' + (js.error||'unknown'));
+              if (js.error === 'already_confirmed') {
+                showTempAlert('您已經確認過此任務了', 'warning');
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>已確認';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
+              } else {
+                showTempAlert('任務無法完成：' + (js.error||'unknown'), 'danger');
+                btn.disabled = false;
+              }
             }
           })
-          .catch(err=>{ showTempAlert('網路錯誤'); console.error(err); })
-          .finally(()=>{ e.target.disabled = false; });
+          .catch(err=>{ 
+            showTempAlert('網路錯誤', 'danger'); 
+            console.error(err);
+            btn.disabled = false;
+          });
       }
     });
 
-    function showTempAlert(msg) {
+    function showTempAlert(msg, type = 'info') {
       const a = document.createElement('div');
-      a.className = 'alert alert-info position-fixed bottom-0 end-0 m-3';
-      a.textContent = msg;
+      a.className = 'alert alert-' + type + ' position-fixed bottom-0 end-0 m-3';
+      a.style.zIndex = '9999';
+      a.innerHTML = msg;
       document.body.appendChild(a);
       setTimeout(()=>{ a.remove(); }, 3500);
     }

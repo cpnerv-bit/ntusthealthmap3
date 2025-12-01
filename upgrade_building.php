@@ -30,7 +30,12 @@ try {
     if ($u['points'] < $upgrade_cost) throw new Exception('點數不足升級');
 
     // deduct points and increase level and reward money proportionally
-    $reward = floor($upgrade_cost / 2);
+    // 金錢獎勵隨等級增加：基礎獎勵 * (新等級 + 1)
+    // 例如：基礎獎勵 6，1升2 得 6*(2+1)=18，2升3 得 6*(3+1)=24，3升4 得 6*(4+1)=30
+    $base_reward = max(1, (int)$row['unlock_cost']) / 2; // 基礎獎勵為解鎖費用的一半
+    $new_level = $level + 1;
+    $reward = floor($base_reward * ($new_level + 1));
+    
     $stmt = $pdo->prepare('UPDATE users SET points = points - ?, money = money + ? WHERE user_id = ?');
     $stmt->execute([$upgrade_cost, $reward, $uid]);
 
